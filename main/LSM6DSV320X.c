@@ -15,11 +15,9 @@
 // hello my name is william
 
 
-/*
-esp_err_t low_g_accel_read(dev, uint8_t *data) {
 
-}
-*/
+
+
 
 
 esp_err_t reg_write(spi_device_handle_t dev, uint8_t reg_addr, uint8_t data) {
@@ -49,6 +47,10 @@ esp_err_t reg_read(spi_device_handle_t dev, uint8_t reg_addr, uint8_t *data) {
 esp_err_t low_g_accel_config(spi_device_handle_t dev) {
     uint8_t data = (7 << 4) | 6; // 0x76
     return reg_write(dev, CTRL1, data);
+}
+
+esp_err_t low_g_accel_read(dev, uint8_t *data) {
+    
 }
 
 void app_main(void)
