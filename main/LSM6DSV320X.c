@@ -23,12 +23,6 @@
 
 // hello my name is william
 
-
-
-
-
-
-
 esp_err_t reg_write(spi_device_handle_t dev, uint8_t reg_addr, uint8_t data) {
     spi_transaction_t transmit = {
         .cmd = 0, // 0 = write
@@ -113,20 +107,20 @@ void app_main(void)
     ESP_ERROR_CHECK(low_g_accel_config(dev));
 
     while (1) {
-        uint8_t x_bytes[2];
+        /*uint8_t x_bytes[2];
         low_g_accel_read(dev, x_bytes);
 
         int16_t x = (x_bytes[1] << 8) | x_bytes[0];
-        printf("X: %d\n", x);
+        printf("X: %d\n", x);*/
 
-        vTaskDelay(pdMS_TO_TICKS(100));   // wait 100 ms
+       // vTaskDelay(pdMS_TO_TICKS(100));   // wait 100 ms
     
-        // int16_t x = read_accel(dev, OUTX_L_A);
-        // int16_t y = read_accel(dev, OUTY_L_A);
-        // int16_t z = read_accel(dev, OUTZ_L_A);
+        int16_t x = read_accel(dev, OUTX_L_A);
+        int16_t y = read_accel(dev, OUTY_L_A);
+        int16_t z = read_accel(dev, OUTZ_L_A);
 
-        // printf("X = %d, Y = %d, Z = %d\n", x, y, z);
+        printf("X = %d, Y = %d, Z = %d\n", x, y, z);
 
-        // vTaskDelay(pdMS_TO_TICKS(100));
+        vTaskDelay(pdMS_TO_TICKS(100));
     }
 }
