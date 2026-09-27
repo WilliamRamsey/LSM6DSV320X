@@ -9,19 +9,28 @@
 #define LSM_CS 5
 #define CLK 18
 
-// SPI CONFIG SETTINGS
+// IMU REGISTER ADDRESSES
+# define CTRL1 0x10
+
+
 
 /*
+esp_err_t low_g_accel_read(dev, uint8_t *data) {
+
+}
+*/
+
+
 esp_err_t reg_write(spi_device_handle_t dev, uint8_t reg_addr, uint8_t data) {
     spi_transaction_t transmit = {
         .cmd = 0, // 0 = write
         .addr = reg_addr,
         .length = 8, // data phase length: 8
         .flags = SPI_TRANS_USE_TXDATA,
-        .tx_data {data}
+        .tx_data = {data}
     };
+    return spi_device_polling_transmit(dev, &transmit);
 }
-*/
 
 esp_err_t reg_read(spi_device_handle_t dev, uint8_t reg_addr, uint8_t *data) {
     spi_transaction_t transmit = {
@@ -35,6 +44,11 @@ esp_err_t reg_read(spi_device_handle_t dev, uint8_t reg_addr, uint8_t *data) {
     return err;
 }
 
+
+esp_err_t low_g_accel_config(spi_device_handle_t dev) {
+    uint8_t data = (7 << 4) | 6; // 0x76
+    return reg_write(dev, CTRL1, data);
+}
 
 void app_main(void)
 {   
@@ -68,4 +82,6 @@ void app_main(void)
     uint8_t dev_id;
     reg_read(dev, 0x0F, &dev_id);
     printf("I am: %d!\n", dev_id);
+
+    ESP_ERROR_CHECK(low_g_accel_config(dev));
 }
