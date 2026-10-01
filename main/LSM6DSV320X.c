@@ -12,18 +12,30 @@
 #define CLK 18
 
 // IMU REGISTER ADDRESSES
-# define CTRL1 0x10
-# define OUTX_L_A 0x28
-# define OUTX_H_A 0x29
-# define OUTY_L_A 0x2A
-# define OUTY_H_A 0x2B
-# define OUTZ_L_A 0x2C
-# define OUTZ_H_A 0x2D
+# define CTRL1 0x10    // Accel Control Register
+# define CTRL2 0x11    // Gyro Control Register
+# define CTRL6 0x15    // Gyro full-scale range (+-250 to +-4000 dps (deg/sec) and low pass filter)
+# define OUTX_L_A 0x28 // Accel X-axis, low byte  (bits 7:0)
+# define OUTX_H_A 0x29 // Accel X-axis, high byte (bits 15:8)
+# define OUTY_L_A 0x2A // Accel Y-axis, low byte  (bits 7:0)
+# define OUTY_H_A 0x2B // Accel Y-axis, high byte (bits 15:8)
+# define OUTZ_L_A 0x2C // Accel Z-axis, low byte  (bits 7:0)
+# define OUTZ_H_A 0x2D // Accel Z-axis, high byte (bits 15:8)
+# define OUTX_L_G 0x22 // Gyro X-axis (pitch), low byte  (bits 7:0)
+# define OUTX_H_G 0x23 // Gyro X-axis (pitch), high byte (bits 15:8)
+# define OUTY_L_G 0x24 // Gyro Y-axis (roll),  low byte  (bits 7:0)
+# define OUTY_H_G 0x25 // Gyro Y-axis (roll),  high byte (bits 15:8)
+# define OUTZ_L_G 0x26 // Gyro Z-axis (yaw),   low byte  (bits 7:0)
+# define OUTZ_H_G 0x27 // Gyro Z-axis (yaw),   high byte (bits 15:8)
 
 // ±2 g full scale (CTRL8 default): 0.061 mg/LSB
 #define ACCEL_SENS_MG_PER_LSB 0.061f
 #define G_TO_MS2 9.80665f
 
+// ±500 dps full scale (CTRL6 = 0x1A): 17.5 mdps/LSB
+#define GYRO_SENS_MDPS_PER_LSB 17.5f
+
+#define ACCEL_MODE 1 // Use 7 for normal mode, 1 for high accuracy mode.
 
 // hello my name is william
 
@@ -51,9 +63,17 @@ esp_err_t reg_read(spi_device_handle_t dev, uint8_t reg_addr, uint8_t *data) {
 }
 
 
-esp_err_t low_g_accel_config(spi_device_handle_t dev) {
-    uint8_t data = (7 << 4) | 6; // 0x76
-    return reg_write(dev, CTRL1, data);
+void low_g_accel_gyro_config(spi_device_handle_t dev) {
+    //Low g accel config
+    uint8_t accel_control = (ACCEL_MODE << 4) | 6; // 0x76
+    ESP_ERROR_CHECK(reg_write(dev, CTRL1, accel_control));
+    //gyro config
+    uint8_t gyro_dsp_control = (1 << 4) | 10; // 0x1A
+    uint8_t gyro_control = (1 << 4) | 6; // 0x76
+    ESP_ERROR_CHECK(reg_write(dev, CTRL6, gyro_dsp_control));
+    ESP_ERROR_CHECK(reg_write(dev, CTRL2, gyro_control));
+    
+    return;
 }
 
 esp_err_t low_g_accel_read(spi_device_handle_t dev, uint8_t *data) {
@@ -62,7 +82,8 @@ esp_err_t low_g_accel_read(spi_device_handle_t dev, uint8_t *data) {
     return ESP_OK;
 }
 
-int16_t read_accel(spi_device_handle_t dev, uint8_t low_reg)
+
+int16_t read_imu(spi_device_handle_t dev, uint8_t low_reg)
 {
     uint8_t low;
     uint8_t high;
@@ -70,9 +91,9 @@ int16_t read_accel(spi_device_handle_t dev, uint8_t low_reg)
     reg_read(dev, low_reg, &low);
     reg_read(dev, low_reg + 1, &high);
 
-    int16_t accel = (int16_t)((high << 8) | low);
+    int16_t data = (int16_t)((high << 8) | low);
 
-    return accel;
+    return data;
 }
 
 void app_main(void)
@@ -108,20 +129,39 @@ void app_main(void)
     reg_read(dev, 0x0F, &dev_id);
     printf("I am: %d!\n", dev_id);
 
-    ESP_ERROR_CHECK(low_g_accel_config(dev));
+    low_g_accel_gyro_config(dev);
+
+    float pitch_deg = 0, roll_deg = 0, yaw_deg = 0;
 
     while (1) 
     {
-        int16_t x = read_accel(dev, OUTX_L_A);
-        int16_t y = read_accel(dev, OUTY_L_A);
-        int16_t z = read_accel(dev, OUTZ_L_A);
+        int16_t x = read_imu(dev, OUTX_L_A);
+        int16_t y = read_imu(dev, OUTY_L_A);
+        int16_t z = read_imu(dev, OUTZ_L_A);
+
+        int16_t pitch = read_imu(dev, OUTX_L_G);
+        int16_t roll = read_imu(dev, OUTY_L_G);
+        int16_t yaw = read_imu(dev, OUTZ_L_G);
+
 
         float x_ms2 = x * ACCEL_SENS_MG_PER_LSB / 1000.0f * G_TO_MS2;
         float y_ms2 = y * ACCEL_SENS_MG_PER_LSB / 1000.0f * G_TO_MS2;
         float z_ms2 = z * ACCEL_SENS_MG_PER_LSB / 1000.0f * G_TO_MS2;
 
-        printf("X = %.2f, Y = %.2f, Z = %.2f m/s^2\n", x_ms2, y_ms2, z_ms2);
+        
 
+        float x_pitch = pitch * GYRO_SENS_MDPS_PER_LSB / 1000.0f;   // deg/s
+        float y_roll  = roll  * GYRO_SENS_MDPS_PER_LSB / 1000.0f;
+        float z_yaw   = yaw   * GYRO_SENS_MDPS_PER_LSB / 1000.0f;
+
+
+        //printf("X = %.2f, Y = %.2f, Z = %.2f m/s^2\n", x_ms2, y_ms2, z_ms2);
+        pitch_deg += x_pitch * 0.1f;   // 0.1 s = your 100 ms delay
+        roll_deg  += y_roll  * 0.1f;
+        yaw_deg   += z_yaw   * 0.1f;
+
+        printf("Pitch = %.1f, Roll = %.1f, Yaw = %.1f deg\n", pitch_deg, roll_deg, yaw_deg);
+        
         vTaskDelay(pdMS_TO_TICKS(100));
     }
 }
