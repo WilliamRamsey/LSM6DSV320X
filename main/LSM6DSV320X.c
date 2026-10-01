@@ -20,6 +20,10 @@
 # define OUTZ_L_A 0x2C
 # define OUTZ_H_A 0x2D
 
+// ±2 g full scale (CTRL8 default): 0.061 mg/LSB
+#define ACCEL_SENS_MG_PER_LSB 0.061f
+#define G_TO_MS2 9.80665f
+
 
 // hello my name is william
 
@@ -106,20 +110,17 @@ void app_main(void)
 
     ESP_ERROR_CHECK(low_g_accel_config(dev));
 
-    while (1) {
-        /*uint8_t x_bytes[2];
-        low_g_accel_read(dev, x_bytes);
-
-        int16_t x = (x_bytes[1] << 8) | x_bytes[0];
-        printf("X: %d\n", x);*/
-
-       // vTaskDelay(pdMS_TO_TICKS(100));   // wait 100 ms
-    
+    while (1) 
+    {
         int16_t x = read_accel(dev, OUTX_L_A);
         int16_t y = read_accel(dev, OUTY_L_A);
         int16_t z = read_accel(dev, OUTZ_L_A);
 
-        printf("X = %d, Y = %d, Z = %d\n", x, y, z);
+        float x_ms2 = x * ACCEL_SENS_MG_PER_LSB / 1000.0f * G_TO_MS2;
+        float y_ms2 = y * ACCEL_SENS_MG_PER_LSB / 1000.0f * G_TO_MS2;
+        float z_ms2 = z * ACCEL_SENS_MG_PER_LSB / 1000.0f * G_TO_MS2;
+
+        printf("X = %.2f, Y = %.2f, Z = %.2f m/s^2\n", x_ms2, y_ms2, z_ms2);
 
         vTaskDelay(pdMS_TO_TICKS(100));
     }
