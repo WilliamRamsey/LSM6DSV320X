@@ -27,6 +27,21 @@
 # define OUTY_H_G 0x25 // Gyro Y-axis (roll),  high byte (bits 15:8)
 # define OUTZ_L_G 0x26 // Gyro Z-axis (yaw),   low byte  (bits 7:0)
 # define OUTZ_H_G 0x27 // Gyro Z-axis (yaw),   high byte (bits 15:8)
+# define SFLP_GRAVX_L 0x1E // Gravity X-axis, low byte  (bits 7:0)
+# define SFLP_GRAVX_H 0x1F // Gravity X-axis, high byte (bits 15:8)
+# define SFLP_GRAVY_L 0x20 // Gravity Y-axis, low byte  (bits 7:0)
+# define SFLP_GRAVY_H 0x21 // Gravity Y-axis, high byte (bits 15:8)
+# define SFLP_GRAVZ_L 0x22 // Gravity Z-axis, low byte  (bits 7:0)
+# define SFLP_GRAVZ_H 0x23 // Gravity Z-axis, high byte (bits 15:8)
+
+// BANK switching register
+#define FUNC_CFG_ACCESS 0x01
+#define EMB_FUNC_REG_ACCESS  (1 << 7)
+
+// Embedded functions configuration registers
+#define EMB_FUNC_EN_A 0x04
+#define SFLP_GAME_EN (1 << 3)
+
 
 // ±2 g full scale (CTRL8 default): 0.061 mg/LSB
 #define ACCEL_SENS_MG_PER_LSB 0.061f
@@ -38,6 +53,13 @@
 #define ACCEL_MODE 1 // Use 7 for normal mode, 1 for high accuracy mode.
 
 // hello my name is william
+esp_err_t select_embedded_bank(spi_device_handle_t dev) {
+    return reg_write(dev, FUNC_CFG_ACCESS, EMB_FUNC_REG_ACCESS);
+}
+
+esp_err_t select_main_bank(spi_device_handle_t dev) {
+    return reg_write(dev, FUNC_CFG_ACCESS, 0x00);
+}
 
 esp_err_t reg_write(spi_device_handle_t dev, uint8_t reg_addr, uint8_t data) {
     spi_transaction_t transmit = {
@@ -72,6 +94,11 @@ void low_g_accel_gyro_config(spi_device_handle_t dev) {
     uint8_t gyro_control = (1 << 4) | 6; // 0x76
     ESP_ERROR_CHECK(reg_write(dev, CTRL6, gyro_dsp_control));
     ESP_ERROR_CHECK(reg_write(dev, CTRL2, gyro_control));
+
+    // enable sflp in embedded functions
+    ESP_ERROR_CHECK(select_embedded_bank(dev));
+    ESP_ERROR_CHECK(reg_write(dev, EMB_FUNC_EN_A, SFLP_GAME_EN));
+    ESP_ERROR_CHECK(select_main_bank(dev));
     
     return;
 }
@@ -143,6 +170,12 @@ void app_main(void)
         int16_t roll = read_imu(dev, OUTY_L_G);
         int16_t yaw = read_imu(dev, OUTZ_L_G);
 
+        // switch to embedded bank to read gravity vector
+        select_embedded_bank(dev);
+        int16_t gx_raw = read_imu(dev, SFLP_GRAVX_L);
+        int16_t gy_raw = read_imu(dev, SFLP_GRAVY_L);
+        int16_t gz_raw = read_imu(dev, SFLP_GRAVZ_L);
+        select_main_bank(dev);
 
         float x_ms2 = x * ACCEL_SENS_MG_PER_LSB / 1000.0f * G_TO_MS2;
         float y_ms2 = y * ACCEL_SENS_MG_PER_LSB / 1000.0f * G_TO_MS2;
@@ -155,12 +188,22 @@ void app_main(void)
         float z_yaw   = yaw   * GYRO_SENS_MDPS_PER_LSB / 1000.0f;
 
 
+        float gx_ms2 = gx_raw * ACCEL_SENS_MG_PER_LSB / 1000.0f * G_TO_MS2;
+        float gy_ms2 = gy_raw * ACCEL_SENS_MG_PER_LSB / 1000.0f * G_TO_MS2;
+        float gz_ms2 = gz_raw * ACCEL_SENS_MG_PER_LSB / 1000.0f * G_TO_MS2;
+
+        float lin_x = x_ms2 - gx_ms2;
+        float lin_y = y_ms2 - gy_ms2;
+        float lin_z = z_ms2 - gz_ms2;
+
         //printf("X = %.2f, Y = %.2f, Z = %.2f m/s^2\n", x_ms2, y_ms2, z_ms2);
         pitch_deg += x_pitch * 0.1f;   // 0.1 s = your 100 ms delay
         roll_deg  += y_roll  * 0.1f;
         yaw_deg   += z_yaw   * 0.1f;
 
-        printf("Pitch = %.1f, Roll = %.1f, Yaw = %.1f deg\n", pitch_deg, roll_deg, yaw_deg);
+        printf("Lin Accel (m/s^2): X=%.2f Y=%.2f Z=%.2f | Angles: P=%.1f R=%.1f Y=%.1f\n", 
+               lin_x, lin_y, lin_z, pitch_deg, roll_deg, yaw_deg);
+        //printf("Pitch = %.1f, Roll = %.1f, Yaw = %.1f deg\n", pitch_deg, roll_deg, yaw_deg);
         
         vTaskDelay(pdMS_TO_TICKS(100));
     }
