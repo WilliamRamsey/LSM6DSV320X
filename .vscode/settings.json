@@ -5,10 +5,10 @@
     "idf.customExtraVars": {
         "IDF_TARGET": "esp32"
     },
-    "clangd.path": "/Users/vineetrao/.espressif/tools/esp-clangd/esp-21.1.3_20260408/esp-clangd/bin/clangd",
+    "clangd.path": "C:\\Espressif\\tools\\esp-clangd\\esp-21.1.3_20260408\\esp-clangd\\bin\\clangd.exe",
     "clangd.arguments": [
       "--background-index",
       "--query-driver=**",
-      "--compile-commands-dir=/Users/vineetrao/Documents/LSM6DSV320X/build"
+      "--compile-commands-dir=c:\\Users\\Ethan\\Desktop\\Purdue\\esap\\driver\\LSM6DSV320X\\build"
     ]
 }

@@ -22,7 +22,7 @@
 /* Change these three values for your hotspot and receiving computer. */
 #define WIFI_SSID       "iPhone (177)"
 #define WIFI_PASSWORD   "Z65hry#6(;&"
-#define RECEIVER_IP     ""
+#define RECEIVER_IP     "172.20.10.6"
 #define RECEIVER_PORT   5000
 
 /* ESP32 SPI pin mapping. */
