@@ -53,13 +53,6 @@
 #define ACCEL_MODE 1 // Use 7 for normal mode, 1 for high accuracy mode.
 
 // hello my name is william
-esp_err_t select_embedded_bank(spi_device_handle_t dev) {
-    return reg_write(dev, FUNC_CFG_ACCESS, EMB_FUNC_REG_ACCESS);
-}
-
-esp_err_t select_main_bank(spi_device_handle_t dev) {
-    return reg_write(dev, FUNC_CFG_ACCESS, 0x00);
-}
 
 esp_err_t reg_write(spi_device_handle_t dev, uint8_t reg_addr, uint8_t data) {
     spi_transaction_t transmit = {
@@ -70,6 +63,14 @@ esp_err_t reg_write(spi_device_handle_t dev, uint8_t reg_addr, uint8_t data) {
         .tx_data = {data}
     };
     return spi_device_polling_transmit(dev, &transmit);
+}
+
+esp_err_t select_embedded_bank(spi_device_handle_t dev) {
+    return reg_write(dev, FUNC_CFG_ACCESS, EMB_FUNC_REG_ACCESS);
+}
+
+esp_err_t select_main_bank(spi_device_handle_t dev) {
+    return reg_write(dev, FUNC_CFG_ACCESS, 0x00);
 }
 
 esp_err_t reg_read(spi_device_handle_t dev, uint8_t reg_addr, uint8_t *data) {
