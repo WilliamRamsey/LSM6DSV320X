@@ -6,10 +6,10 @@
 #include "freertos/task.h"
 
 // PIN MAPPING
-#define MOSI 23
-#define MISO 19
-#define LSM_CS 5
-#define CLK 18
+#define MOSI 10
+#define MISO 9
+#define LSM_CS 2
+#define CLK 8
 
 // IMU REGISTER ADDRESSES
 # define CTRL1 0x10    // Accel Control Register
