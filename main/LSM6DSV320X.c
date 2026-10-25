@@ -20,16 +20,16 @@
 #include "nvs_flash.h"
 
 /* Change these three values for your hotspot and receiving computer. */
-#define WIFI_SSID       "iPhone (177)"
-#define WIFI_PASSWORD   "Z65hry#6(;&"
-#define RECEIVER_IP     "172.20.10.6"
+#define WIFI_SSID       "YourSSID"  // Set to a filler value of YourSSID
+#define WIFI_PASSWORD   "YourPassword"   // Set to a filler value of YourPassword
+#define RECEIVER_IP     "YourIP" // Set to a filler value of YourIP
 #define RECEIVER_PORT   5000
 
 /* ESP32 SPI pin mapping. */
-#define PIN_MOSI        23
-#define PIN_MISO        19
-#define PIN_LSM_CS      5
-#define PIN_CLK         18
+#define PIN_MOSI        10
+#define PIN_MISO        9
+#define PIN_LSM_CS      2
+#define PIN_CLK         8
 
 /* LSM6DSV320X register addresses. */
 #define CTRL1           0x10
@@ -169,6 +169,7 @@ static void wifi_event_handler(void *arg,
 static void initialize_wifi(void)
 {
     esp_err_t err = nvs_flash_init();
+
     if (err == ESP_ERR_NVS_NO_FREE_PAGES ||
         err == ESP_ERR_NVS_NEW_VERSION_FOUND) {
         ESP_ERROR_CHECK(nvs_flash_erase());
@@ -209,6 +210,8 @@ static void initialize_wifi(void)
              sizeof(wifi_config.sta.password),
              "%s",
              WIFI_PASSWORD);
+
+    wifi_config.sta.threshold.authmode = WIFI_AUTH_WPA2_PSK;
 
     ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_STA));
     ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_STA, &wifi_config));

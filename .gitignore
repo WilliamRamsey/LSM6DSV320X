@@ -1,2 +1,5 @@
 /build
 sdkconfig
+.env
+*.csv
+.vscode/
