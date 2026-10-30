@@ -278,6 +278,8 @@ void app_main(void)
         int16_t gyro_y_raw = read_imu_axis(imu, OUTY_L_G);
         int16_t gyro_z_raw = read_imu_axis(imu, OUTZ_L_G);
 
+        int64_t now_us = esp_timer_get_time();
+
         float accel_x_ms2 = accel_x_raw * ACCEL_SENS_MG_PER_LSB
                             / 1000.0f * G_TO_MS2;
         float accel_y_ms2 = accel_y_raw * ACCEL_SENS_MG_PER_LSB
@@ -289,7 +291,6 @@ void app_main(void)
         float gyro_y_dps = gyro_y_raw * GYRO_SENS_MDPS_PER_LSB / 1000.0f;
         float gyro_z_dps = gyro_z_raw * GYRO_SENS_MDPS_PER_LSB / 1000.0f;
 
-        int64_t now_us = esp_timer_get_time();
         float elapsed_seconds = (now_us - previous_time_us) / 1000000.0f;
         previous_time_us = now_us;
 
