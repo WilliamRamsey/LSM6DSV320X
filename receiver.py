@@ -17,6 +17,8 @@ def main() -> None:
         sock.bind(("0.0.0.0", UDP_PORT))
         print(f"Listening for ESP32 telemetry on UDP port {UDP_PORT}")
         print(FIELDS)
+        initial_timestap = None
+        packet_initialized = False
         while True:
             
             packet, sender = sock.recvfrom(2048)
@@ -25,9 +27,14 @@ def main() -> None:
             #x = p.match(data)
             packet = data.split(",")
             print(f"{sender[0]}: {data}")
+            if sender[0] == "021509120518-2116":
+                initial_timestamp = packet[1]
+                print("First packet received")
+                packet_initialized = True   
             #print(f"{sender[0]}: {x.group(0)}")
             #packets.append([x.group(0)])
-            packets.append(packet)
+            if packet_initialized:
+                packets.append(packet)
 
 
 

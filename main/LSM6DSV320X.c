@@ -299,21 +299,32 @@ void app_main(void)
         yaw_deg += gyro_z_dps * elapsed_seconds;
 
         char packet[256];
-        int packet_length = snprintf(
-            packet,
-            sizeof(packet),
-            "%lu,%lld,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f\n",
-            (unsigned long)sequence++,
-            (long long)now_us,
-            accel_x_ms2,
-            accel_y_ms2,
-            accel_z_ms2,
-            gyro_x_dps,
-            gyro_y_dps,
-            gyro_z_dps,
-            pitch_deg,
-            roll_deg,
-            yaw_deg);
+        int packet_length;
+        // Check if this is the very first packet
+        if (sequence == 0) {
+            packet_length = snprintf(
+                packet,
+                sizeof(packet),
+                "021509120518-2116,%lld\n",
+                (long long)now_us);
+        } else {
+            packet_length = snprintf(
+                packet,
+                sizeof(packet),
+                "%lu,%lld,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f\n",
+                (unsigned long)sequence,
+                (long long)now_us,
+                accel_x_ms2,
+                accel_y_ms2,
+                accel_z_ms2,
+                gyro_x_dps,
+                gyro_y_dps,
+                gyro_z_dps,
+                pitch_deg,
+                roll_deg,
+                yaw_deg);
+        }
+        sequence++; // Increment sequence after checking
 
         printf("%s", packet);
 
