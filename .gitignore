@@ -1,4 +1,3 @@
 /build
 sdkconfig
-/.vscode
-*.csv
+.vscode/

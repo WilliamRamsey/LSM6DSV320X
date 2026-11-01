@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <math.h>
+#include <stdbool.h>
 #include "esp_timer.h"
 #include "driver/spi_master.h"
 #include "esp_err.h"
@@ -156,19 +157,34 @@ void app_main(void)
 
     low_g_accel_gyro_config(dev);
 
-    // Gyro bias calibration: keep the board still at startup
-    vTaskDelay(pdMS_TO_TICKS(200));
-    const int CAL_SAMPLES = 400;
+    // Gyro bias calibration: wait for the gyro to settle, then accept a window
+    // only if it is steady (low spread); otherwise retry.
+    vTaskDelay(pdMS_TO_TICKS(1000));
+    const int CAL_SAMPLES = 200;
     float bias_x = 0, bias_y = 0, bias_z = 0;
-    for (int i = 0; i < CAL_SAMPLES; i++) {
-        bias_x += read_imu(dev, OUTX_L_G) * GYRO_SENS_MDPS_PER_LSB / 1000.0f;
-        bias_y += read_imu(dev, OUTY_L_G) * GYRO_SENS_MDPS_PER_LSB / 1000.0f;
-        bias_z += read_imu(dev, OUTZ_L_G) * GYRO_SENS_MDPS_PER_LSB / 1000.0f;
-        vTaskDelay(pdMS_TO_TICKS(5));
+    for (int attempt = 0; attempt < 20; attempt++) {
+        float sx = 0, sy = 0, sz = 0, qx = 0, qy = 0, qz = 0;
+        for (int i = 0; i < CAL_SAMPLES; i++) {
+            float gx = read_imu(dev, OUTX_L_G) * GYRO_SENS_MDPS_PER_LSB / 1000.0f;
+            float gy = read_imu(dev, OUTY_L_G) * GYRO_SENS_MDPS_PER_LSB / 1000.0f;
+            float gz = read_imu(dev, OUTZ_L_G) * GYRO_SENS_MDPS_PER_LSB / 1000.0f;
+            sx += gx; sy += gy; sz += gz;
+            qx += gx * gx; qy += gy * gy; qz += gz * gz;
+            vTaskDelay(pdMS_TO_TICKS(5));
+        }
+        bias_x = sx / CAL_SAMPLES; bias_y = sy / CAL_SAMPLES; bias_z = sz / CAL_SAMPLES;
+        float vx = qx / CAL_SAMPLES - bias_x * bias_x;
+        float vy = qy / CAL_SAMPLES - bias_y * bias_y;
+        float vz = qz / CAL_SAMPLES - bias_z * bias_z;
+        if (vx < 0.25f && vy < 0.25f && vz < 0.25f) break; // std < 0.5 dps
     }
-    bias_x /= CAL_SAMPLES;
-    bias_y /= CAL_SAMPLES;
-    bias_z /= CAL_SAMPLES;
+    printf("Gyro bias (dps): %.2f %.2f %.2f\n", bias_x, bias_y, bias_z);
+
+    // Ongoing bias re-learning while the board is stationary
+    float st_sx = 0, st_sy = 0, st_sz = 0;
+    int st_count = 0;
+    float prev_gx = 0, prev_gy = 0, prev_gz = 0;
+    float prev_ax = 0, prev_ay = 0, prev_az = 0;
 
     const float RAD2DEG = 57.2957795f;
     const float DEG2RAD = 0.0174532925f;
@@ -207,13 +223,36 @@ void app_main(void)
         float y_roll  = roll  * GYRO_SENS_MDPS_PER_LSB / 1000.0f - bias_y;
         float z_yaw   = yaw   * GYRO_SENS_MDPS_PER_LSB / 1000.0f - bias_z;
 
+        // Stationary detection: gyro and accel nearly unchanged between samples
+        float raw_gx = pitch * GYRO_SENS_MDPS_PER_LSB / 1000.0f;
+        float raw_gy = roll  * GYRO_SENS_MDPS_PER_LSB / 1000.0f;
+        float raw_gz = yaw   * GYRO_SENS_MDPS_PER_LSB / 1000.0f;
+        bool still = fabsf(raw_gx - prev_gx) < 0.5f && fabsf(raw_gy - prev_gy) < 0.5f &&
+                     fabsf(raw_gz - prev_gz) < 0.5f && fabsf(x_ms2 - prev_ax) < 0.1f &&
+                     fabsf(y_ms2 - prev_ay) < 0.1f && fabsf(z_ms2 - prev_az) < 0.1f;
+        prev_gx = raw_gx; prev_gy = raw_gy; prev_gz = raw_gz;
+        prev_ax = x_ms2; prev_ay = y_ms2; prev_az = z_ms2;
+        if (still) {
+            st_sx += raw_gx; st_sy += raw_gy; st_sz += raw_gz;
+            if (++st_count >= 50) { // ~1 s of stillness
+                bias_x = st_sx / st_count;
+                bias_y = st_sy / st_count;
+                bias_z = st_sz / st_count;
+                st_sx = st_sy = st_sz = 0;
+                st_count = 0;
+            }
+        } else {
+            st_sx = st_sy = st_sz = 0;
+            st_count = 0;
+        }
+
         // Accelerometer-derived angles
         float acc_pitch = atan2f(y_ms2, z_ms2) * RAD2DEG;
         float acc_roll  = atan2f(-x_ms2, sqrtf(y_ms2 * y_ms2 + z_ms2 * z_ms2)) * RAD2DEG;
 
         pitch_deg = ALPHA * (pitch_deg + x_pitch * dt) + (1.0f - ALPHA) * acc_pitch;
         roll_deg  = ALPHA * (roll_deg  + y_roll  * dt) + (1.0f - ALPHA) * acc_roll;
-        yaw_deg  += z_yaw * dt; // no reference for yaw, will still drift slowly
+        if (fabsf(z_yaw) > 0.3f) yaw_deg += z_yaw * dt; // deadband // no reference for yaw, will still drift slowly
 
         // Estimated gravity in the sensor frame from the fused angles
         float a = pitch_deg * DEG2RAD;
