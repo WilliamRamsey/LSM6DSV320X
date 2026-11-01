@@ -20,9 +20,9 @@
 #include "nvs_flash.h"
 
 /* Change these three values for your hotspot and receiving computer. */
-#define WIFI_SSID       "YourSSID"  // Set to a filler value of YourSSID
-#define WIFI_PASSWORD   "YourPassword"   // Set to a filler value of YourPassword
-#define RECEIVER_IP     "YourIP" // Set to a filler value of YourIP
+#define WIFI_SSID       "THINKPAD-L14"  // Set to a filler value of YourSSID
+#define WIFI_PASSWORD   "FieldVision"   // Set to a filler value of YourPassword
+#define RECEIVER_IP     "192.168.137.1" // Set to a filler value of YourIP
 #define RECEIVER_PORT   5000
 
 /* ESP32 SPI pin mapping. */
