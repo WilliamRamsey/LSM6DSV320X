@@ -1,4 +1,6 @@
 #include <stdio.h>
+#include <math.h>
+#include "esp_timer.h"
 #include "driver/spi_master.h"
 #include "esp_err.h"
 #include "esp_log.h"
@@ -96,11 +98,6 @@ void low_g_accel_gyro_config(spi_device_handle_t dev) {
     ESP_ERROR_CHECK(reg_write(dev, CTRL6, gyro_dsp_control));
     ESP_ERROR_CHECK(reg_write(dev, CTRL2, gyro_control));
 
-    // enable sflp in embedded functions
-    ESP_ERROR_CHECK(select_embedded_bank(dev));
-    ESP_ERROR_CHECK(reg_write(dev, EMB_FUNC_EN_A, SFLP_GAME_EN));
-    ESP_ERROR_CHECK(select_main_bank(dev));
-    
     return;
 }
 
@@ -159,7 +156,33 @@ void app_main(void)
 
     low_g_accel_gyro_config(dev);
 
-    float pitch_deg = 0, roll_deg = 0, yaw_deg = 0;
+    // Gyro bias calibration: keep the board still at startup
+    vTaskDelay(pdMS_TO_TICKS(200));
+    const int CAL_SAMPLES = 400;
+    float bias_x = 0, bias_y = 0, bias_z = 0;
+    for (int i = 0; i < CAL_SAMPLES; i++) {
+        bias_x += read_imu(dev, OUTX_L_G) * GYRO_SENS_MDPS_PER_LSB / 1000.0f;
+        bias_y += read_imu(dev, OUTY_L_G) * GYRO_SENS_MDPS_PER_LSB / 1000.0f;
+        bias_z += read_imu(dev, OUTZ_L_G) * GYRO_SENS_MDPS_PER_LSB / 1000.0f;
+        vTaskDelay(pdMS_TO_TICKS(5));
+    }
+    bias_x /= CAL_SAMPLES;
+    bias_y /= CAL_SAMPLES;
+    bias_z /= CAL_SAMPLES;
+
+    const float RAD2DEG = 57.2957795f;
+    const float DEG2RAD = 0.0174532925f;
+    const float ALPHA = 0.98f; // complementary filter: gyro weight
+
+    // Initialise angles from the accelerometer
+    float x0 = read_imu(dev, OUTX_L_A) * ACCEL_SENS_MG_PER_LSB;
+    float y0 = read_imu(dev, OUTY_L_A) * ACCEL_SENS_MG_PER_LSB;
+    float z0 = read_imu(dev, OUTZ_L_A) * ACCEL_SENS_MG_PER_LSB;
+    float pitch_deg = atan2f(y0, z0) * RAD2DEG;                      // about X
+    float roll_deg  = atan2f(-x0, sqrtf(y0 * y0 + z0 * z0)) * RAD2DEG; // about Y
+    float yaw_deg = 0;
+
+    int64_t last_us = esp_timer_get_time();
 
     while (1) 
     {
@@ -171,41 +194,46 @@ void app_main(void)
         int16_t roll = read_imu(dev, OUTY_L_G);
         int16_t yaw = read_imu(dev, OUTZ_L_G);
 
-        // switch to embedded bank to read gravity vector
-        select_embedded_bank(dev);
-        int16_t gx_raw = read_imu(dev, SFLP_GRAVX_L);
-        int16_t gy_raw = read_imu(dev, SFLP_GRAVY_L);
-        int16_t gz_raw = read_imu(dev, SFLP_GRAVZ_L);
-        select_main_bank(dev);
+        int64_t now_us = esp_timer_get_time();
+        float dt = (now_us - last_us) / 1e6f;
+        last_us = now_us;
 
         float x_ms2 = x * ACCEL_SENS_MG_PER_LSB / 1000.0f * G_TO_MS2;
         float y_ms2 = y * ACCEL_SENS_MG_PER_LSB / 1000.0f * G_TO_MS2;
         float z_ms2 = z * ACCEL_SENS_MG_PER_LSB / 1000.0f * G_TO_MS2;
 
-        
+        // deg/s with bias removed
+        float x_pitch = pitch * GYRO_SENS_MDPS_PER_LSB / 1000.0f - bias_x;
+        float y_roll  = roll  * GYRO_SENS_MDPS_PER_LSB / 1000.0f - bias_y;
+        float z_yaw   = yaw   * GYRO_SENS_MDPS_PER_LSB / 1000.0f - bias_z;
 
-        float x_pitch = pitch * GYRO_SENS_MDPS_PER_LSB / 1000.0f;   // deg/s
-        float y_roll  = roll  * GYRO_SENS_MDPS_PER_LSB / 1000.0f;
-        float z_yaw   = yaw   * GYRO_SENS_MDPS_PER_LSB / 1000.0f;
+        // Accelerometer-derived angles
+        float acc_pitch = atan2f(y_ms2, z_ms2) * RAD2DEG;
+        float acc_roll  = atan2f(-x_ms2, sqrtf(y_ms2 * y_ms2 + z_ms2 * z_ms2)) * RAD2DEG;
 
+        pitch_deg = ALPHA * (pitch_deg + x_pitch * dt) + (1.0f - ALPHA) * acc_pitch;
+        roll_deg  = ALPHA * (roll_deg  + y_roll  * dt) + (1.0f - ALPHA) * acc_roll;
+        yaw_deg  += z_yaw * dt; // no reference for yaw, will still drift slowly
 
-        float gx_ms2 = gx_raw * ACCEL_SENS_MG_PER_LSB / 1000.0f * G_TO_MS2;
-        float gy_ms2 = gy_raw * ACCEL_SENS_MG_PER_LSB / 1000.0f * G_TO_MS2;
-        float gz_ms2 = gz_raw * ACCEL_SENS_MG_PER_LSB / 1000.0f * G_TO_MS2;
+        // Estimated gravity in the sensor frame from the fused angles
+        float a = pitch_deg * DEG2RAD;
+        float b = roll_deg * DEG2RAD;
+        float gx_ms2 = -sinf(b) * G_TO_MS2;
+        float gy_ms2 =  sinf(a) * cosf(b) * G_TO_MS2;
+        float gz_ms2 =  cosf(a) * cosf(b) * G_TO_MS2;
 
         float lin_x = x_ms2 - gx_ms2;
         float lin_y = y_ms2 - gy_ms2;
         float lin_z = z_ms2 - gz_ms2;
 
-        //printf("X = %.2f, Y = %.2f, Z = %.2f m/s^2\n", x_ms2, y_ms2, z_ms2);
-        pitch_deg += x_pitch * 0.1f;   // 0.1 s = your 100 ms delay
-        roll_deg  += y_roll  * 0.1f;
-        yaw_deg   += z_yaw   * 0.1f;
+        // Print every 5th sample (~10 Hz) while the filter keeps running at 50 Hz
+        static int print_count = 0;
+        if (++print_count >= 5) {
+            print_count = 0;
+            printf("Lin Accel (m/s^2): X=%.2f Y=%.2f Z=%.2f | Angles: P=%.1f R=%.1f Y=%.1f\n",
+                   lin_x, lin_y, lin_z, pitch_deg, roll_deg, yaw_deg);
+        }
 
-        printf("Lin Accel (m/s^2): X=%.2f Y=%.2f Z=%.2f | Angles: P=%.1f R=%.1f Y=%.1f\n", 
-               lin_x, lin_y, lin_z, pitch_deg, roll_deg, yaw_deg);
-        //printf("Pitch = %.1f, Roll = %.1f, Yaw = %.1f deg\n", pitch_deg, roll_deg, yaw_deg);
-        
-        vTaskDelay(pdMS_TO_TICKS(100));
+        vTaskDelay(pdMS_TO_TICKS(20));
     }
 }
