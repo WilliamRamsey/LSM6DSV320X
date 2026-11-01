@@ -31,6 +31,8 @@ def main() -> None:
                 initial_timestamp = packet[1]
                 print("First packet received")
                 packet_initialized = True   
+            else:
+                packet[1] = (int(packet[1]) - int(initial_timestamp))
             #print(f"{sender[0]}: {x.group(0)}")
             #packets.append([x.group(0)])
             if packet_initialized:
