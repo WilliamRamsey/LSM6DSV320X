@@ -2,4 +2,3 @@
 sdkconfig
 .env
 *.csv
-.vscode/
