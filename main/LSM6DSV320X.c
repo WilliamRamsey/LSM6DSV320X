@@ -101,7 +101,7 @@ static int16_t read_imu_axis(spi_device_handle_t dev, uint8_t low_reg)
 
 static void configure_imu(spi_device_handle_t dev)
 {
-    uint8_t accel_control = (ACCEL_MODE << 4) | 6; /* 0x16 */
+    uint8_t accel_control = (ACCEL_MODE << 4) | 12; /* 0x06 */
     uint8_t gyro_dsp_control = (1 << 4) | 10;      /* 0x1A */
     uint8_t gyro_control = (1 << 4) | 6;           /* 0x16 */
 
@@ -343,6 +343,6 @@ void app_main(void)
             }
         }
 
-        vTaskDelay(pdMS_TO_TICKS(100));
+        //vTaskDelay(pdMS_TO_TICKS(100));
     }
 }
